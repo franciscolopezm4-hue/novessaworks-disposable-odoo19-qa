@@ -20,6 +20,9 @@ opportunity = env['crm.lead'].create({'name': prefix + ' Opportunity Alpha',
     'type': 'opportunity', 'partner_id': contact.id, 'expected_revenue': 12500})
 project = env['project.project'].create({'name': prefix + ' Project Alpha'})
 task = env['project.task'].create({'name': prefix + ' Task Alpha', 'project_id': project.id})
+for baseline_task in env['project.task'].sudo().search([]):
+    if not baseline_task.name.startswith('NWQA-'):
+        baseline_task.write({'name': prefix + ' Baseline Task ' + str(baseline_task.id)})
 expiration = datetime.datetime.now() + datetime.timedelta(hours=2)
 api_key = env['res.users.apikeys'].with_user(admin)._generate(
     'rpc', prefix + ' ephemeral JSON-2', expiration)
