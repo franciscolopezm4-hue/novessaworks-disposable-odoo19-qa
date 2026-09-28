@@ -12,6 +12,7 @@ on:
         type: string
 permissions:
   contents: read
+  deployments: write
 concurrency:
   group: disposable-odoo19-qa
   cancel-in-progress: false
@@ -22,6 +23,7 @@ jobs:
     env:
       NWQA_PUBLIC_KEY_B64: ${{ inputs.public_key_b64 }}
       NWQA_PREFIX: ${{ inputs.prefix }}
+      NWQA_GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - name: Start authenticated synthetic Odoo and temporary tunnel

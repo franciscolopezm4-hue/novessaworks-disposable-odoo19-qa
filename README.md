@@ -4,7 +4,7 @@ Generic synthetic QA harness. It contains no product source, customer data or st
 
 Manual dispatch only, standard `ubuntu-24.04` GitHub-hosted runner in this public repository. No larger runners, artifacts, caches, packages or paid services. Official `odoo:19.0`, PostgreSQL 16 and Cloudflare's free Quick Tunnel.
 
-Supply an RSA-4096 public key (base64 PEM) and a unique `NWQA-YYYYMMDD-HHMM` prefix. Keep the matching private key on the initiating PC. Credentials are randomly generated at runtime, masked defensively, and transferred only as RSA-OAEP-SHA256 ciphertext. No plaintext credentials are emitted into logs or artifacts. The ciphertext cannot authenticate to Odoo.
+Supply an RSA-4096 public key (base64 PEM) and a unique `NWQA-YYYYMMDD-HHMM` prefix. Keep the matching private key on the initiating PC. Credentials are randomly generated at runtime, masked defensively, and transferred only as RSA-OAEP-SHA256 ciphertext in transient GitHub deployment metadata, removed during cleanup. No credentials are emitted into logs or artifacts. The ciphertext cannot authenticate to Odoo. The workflow token has only contents-read and deployments-write permissions on this QA repository and is destroyed with the runner.
 
 Odoo has no demo data. All test records carry the run prefix. Database management is disabled, PostgreSQL is not published, and Odoo binds only to the runner loopback. JSON-2 requires a newly generated API key with a two-hour expiry. The tunnel is temporary, with no named tunnel, account token or custom domain.
 

@@ -18,10 +18,26 @@ CONTAINERS = ['nwqa-tunnel', 'nwqa-odoo', 'nwqa-postgres']
 def run(args, **kwargs):
     result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs)
     if result.returncode:
+        safe = result.stderr.decode(errors='replace')
+        for key in ['POSTGRES_PASSWORD', 'NWQA_WEB_PASSWORD', 'NWQA_GITHUB_TOKEN']:
+            value = os.environ.get(key)
+            if value:
+                safe = safe.replace(value, '[redacted]')
+        safe = re.sub(r'[A-Za-z0-9_-]{40,}', '[redacted]', safe)
+        print('NWQA_COMMAND_DIAGNOSTIC: ' + safe[-1800:], flush=True)
         raise RuntimeError('Command failed: ' + args[0] + ' ' + args[1])
     return result.stdout
 
 def cleanup():
+    metadata = ROOT / 'deployment-id'
+    if metadata.exists():
+        deployment = metadata.read_text().strip()
+        try:
+            github('/deployments/' + deployment + '/statuses', 'POST', {'state': 'inactive'})
+            github('/deployments/' + deployment, 'DELETE')
+            print('NWQA_ENCRYPTED_TRANSFER_REMOVED', flush=True)
+        except Exception:
+            print('NWQA_TRANSFER_CLEANUP_PENDING', flush=True)
     for name in CONTAINERS:
         subprocess.run(['docker', 'rm', '-f', '-v', name], stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL)
@@ -32,6 +48,15 @@ def cleanup():
     if ROOT.exists():
         shutil.rmtree(ROOT)
     print('NWQA_CLEANUP: containers/anonymous volumes/ephemeral credential files removed')
+
+def github(route, method, payload=None):
+    url = 'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY'] + route
+    headers = {'Authorization': 'Bearer ' + os.environ['NWQA_GITHUB_TOKEN'],
+               'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10'}
+    data = None if payload is None else json.dumps(payload).encode()
+    with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=headers,
+         method=method), timeout=20) as response:
+        return None if response.status == 204 else json.load(response)
 
 def fetch_json(url, key=None, payload=None):
     headers = {'Content-Type': 'application/json'}
@@ -142,7 +167,15 @@ def provision():
     encrypted = run(['openssl', 'pkeyutl', '-encrypt', '-pubin', '-inkey', str(ROOT/'public.pem'),
         '-pkeyopt', 'rsa_padding_mode:oaep', '-pkeyopt', 'rsa_oaep_md:sha256'],
         input=json.dumps(transfer, separators=(',', ':')).encode())
-    print('NWQA_ENCRYPTED_CREDENTIAL: ' + base64.b64encode(encrypted).decode(), flush=True)
+    # GitHub job logs are unavailable through REST during a live job. Transfer ciphertext
+    # as ephemeral deployment metadata, never as plaintext in logs or artifacts.
+    deployment = github('/deployments', 'POST', {'ref': os.environ['GITHUB_SHA'],
+        'task': 'NWQA-disposable-test', 'auto_merge': False, 'required_contexts': [],
+        'environment': prefix, 'transient_environment': True, 'production_environment': False,
+        'payload': {'encryptedCredential': base64.b64encode(encrypted).decode(),
+                    'url': url, 'prefix': prefix, 'runId': os.environ['GITHUB_RUN_ID']}})
+    (ROOT/'deployment-id').write_text(str(deployment['id']))
+    print('NWQA_ENCRYPTED_TRANSFER_READY: ' + str(deployment['id']), flush=True)
     print('NWQA_READY: ' + json.dumps({'url': url, 'version': version['version'],
         'json2': True, 'prefix': prefix, 'fixtureIds': credentials['fixtures'],
         'disposable': True, 'leaseMinutes': 100, 'costUSD': 0}), flush=True)
