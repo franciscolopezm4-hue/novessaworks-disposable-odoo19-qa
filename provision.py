@@ -135,7 +135,7 @@ def provision():
                        credentials['apiKey'], {'domain': [['name', 'ilike', prefix]],
                        'fields': ['id', 'name'], 'limit': 1})
             break
-        except (urllib.error.URLError, TimeoutError):
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
             time.sleep(2)
     else:
         raise RuntimeError('Odoo JSON-2 readiness timed out')
@@ -156,7 +156,7 @@ def provision():
                     {'domain': [['name', 'ilike', prefix]], 'fields': ['id', 'name'], 'limit': 1})
                 if public_version.get('version_info', [0])[0] == 19 and len(records) == 1:
                     break
-            except (urllib.error.URLError, TimeoutError):
+            except (urllib.error.URLError, TimeoutError, ConnectionError):
                 pass
         time.sleep(2)
     else:
