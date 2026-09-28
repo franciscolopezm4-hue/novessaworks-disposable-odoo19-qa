@@ -1,0 +1,31 @@
+name: Disposable Odoo 19 JSON-2 QA
+on:
+  workflow_dispatch:
+    inputs:
+      public_key_b64:
+        description: RSA-4096 public PEM, base64. NEVER a private key.
+        required: true
+        type: string
+      prefix:
+        description: Synthetic prefix NWQA-YYYYMMDD-HHMM
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: disposable-odoo19-qa
+  cancel-in-progress: false
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 115
+    env:
+      NWQA_PUBLIC_KEY_B64: ${{ inputs.public_key_b64 }}
+      NWQA_PREFIX: ${{ inputs.prefix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start authenticated synthetic Odoo and temporary tunnel
+        run: python3 provision.py
+      - name: Destroy containers, volumes and ephemeral secrets
+        if: always()
+        run: python3 provision.py --cleanup
