@@ -87,7 +87,8 @@ def provision():
     db_password, web_password, master_password = [secrets.token_urlsafe(32) for _ in range(3)]
     for value in [db_password, web_password, master_password]:
         print('::add-mask::' + value, flush=True)
-    os.environ.update(POSTGRES_PASSWORD=db_password, NWQA_WEB_PASSWORD=web_password)
+    os.environ.update(POSTGRES_PASSWORD=db_password, PASSWORD=db_password, NWQA_WEB_PASSWORD=web_password)
+    odoo_env = ['-e', 'HOST=nwqa-postgres', '-e', 'PORT=5432', '-e', 'USER=odoo', '-e', 'PASSWORD']
     config = ('[options]\ndb_host = nwqa-postgres\ndb_port = 5432\ndb_user = odoo\n'
         'db_password = ' + db_password + '\ndb_name = NWQA\ndbfilter = ^NWQA$\n'
         'admin_passwd = ' + master_password + '\nlist_db = False\nproxy_mode = True\n'
@@ -112,18 +113,18 @@ def provision():
     else:
         raise RuntimeError('PostgreSQL readiness timed out')
     volume = str(shared) + ':/nwqa'
-    run(['docker', 'run', '--rm', '--network', 'nwqa-net', '-v', volume, 'odoo:19.0',
+    run(['docker', 'run', '--rm', '--network', 'nwqa-net', '-v', volume, *odoo_env, 'odoo:19.0',
         'odoo', '-c', '/nwqa/odoo.conf', '-i', 'base,contacts,crm,project',
         '--without-demo=all', '--stop-after-init'])
     # New database, credential rotation and synthetic fixtures before any public exposure.
     with open(shared/'seed_odoo.py', 'rb') as seed:
         run(['docker', 'run', '--rm', '-i', '--network', 'nwqa-net', '-v', volume,
-            '-e', 'NWQA_PREFIX', '-e', 'NWQA_WEB_PASSWORD', 'odoo:19.0',
+            '-e', 'NWQA_PREFIX', '-e', 'NWQA_WEB_PASSWORD', *odoo_env, 'odoo:19.0',
             'odoo', 'shell', '-c', '/nwqa/odoo.conf', '--no-http'], stdin=seed)
     credentials = json.loads((shared/'credential.json').read_text())
     print('::add-mask::' + credentials['apiKey'], flush=True)
     run(['docker', 'run', '-d', '--name', 'nwqa-odoo', '--network', 'nwqa-net',
-        '-p', '127.0.0.1:18079:8069', '-v', volume, 'odoo:19.0',
+        '-p', '127.0.0.1:18079:8069', '-v', volume, *odoo_env, 'odoo:19.0',
         'odoo', '-c', '/nwqa/odoo.conf'])
     for _ in range(45):
         try:
